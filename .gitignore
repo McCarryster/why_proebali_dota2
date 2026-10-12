@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+.cache/
+other/
+coach.egg-info/
+runs/

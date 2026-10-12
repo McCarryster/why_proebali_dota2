@@ -1,0 +1,92 @@
+[
+ {
+  "match_id": 9041884546,
+  "duration_s": 1192,
+  "radiant_win": true,
+  "game_mode": 23,
+  "min_winner_gold_adv": 0,
+  "max_abs_gold_adv": 55035,
+  "comeback": false
+ },
+ {
+  "match_id": 9041879662,
+  "duration_s": 1345,
+  "radiant_win": true,
+  "game_mode": 23,
+  "min_winner_gold_adv": -1648,
+  "max_abs_gold_adv": 50452,
+  "comeback": false
+ },
+ {
+  "match_id": 9041878637,
+  "duration_s": 1335,
+  "radiant_win": false,
+  "game_mode": 23,
+  "min_winner_gold_adv": -6108,
+  "max_abs_gold_adv": 50352,
+  "comeback": true
+ },
+ {
+  "match_id": 9041878312,
+  "duration_s": 1235,
+  "radiant_win": true,
+  "game_mode": 23,
+  "min_winner_gold_adv": -774,
+  "max_abs_gold_adv": 49208,
+  "comeback": false
+ },
+ {
+  "match_id": 9041876919,
+  "duration_s": 1353,
+  "radiant_win": true,
+  "game_mode": 23,
+  "min_winner_gold_adv": -1842,
+  "max_abs_gold_adv": 33434,
+  "comeback": false
+ },
+ {
+  "match_id": 9041875992,
+  "duration_s": 1432,
+  "radiant_win": false,
+  "game_mode": 23,
+  "min_winner_gold_adv": -15304,
+  "max_abs_gold_adv": 39050,
+  "comeback": true
+ },
+ {
+  "match_id": 9041875831,
+  "duration_s": 1189,
+  "radiant_win": false,
+  "game_mode": 23,
+  "min_winner_gold_adv": -84,
+  "max_abs_gold_adv": 47982,
+  "comeback": false
+ },
+ {
+  "match_id": 9041875490,
+  "duration_s": 1479,
+  "radiant_win": true,
+  "game_mode": 23,
+  "min_winner_gold_adv": 0,
+  "max_abs_gold_adv": 20122,
+  "comeback": false
+ },
+ {
+  "match_id": 9041860898,
+  "duration_s": 1646,
+  "radiant_win": false,
+  "game_mode": 23,
+  "min_winner_gold_adv": -24616,
+  "max_abs_gold_adv": 24616,
+  "comeback": true
+ },
+ {
+  "match_id": 9041857663,
+  "duration_s": 1508,
+  "radiant_win": true,
+  "game_mode": 23,
+  "min_winner_gold_adv": -7072,
+  "max_abs_gold_adv": 38826,
+  "comeback": true
+ }
+]
