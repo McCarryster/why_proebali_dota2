@@ -82,7 +82,12 @@ def digest(m: dict) -> str:
         elif o["type"] == "building_kill":
             lines.append(f"{_mmss(o['time'])} {who} destroyed {_building(o['key'])}")
 
-    lines += ["", "TEAMFIGHTS (start-end, total deaths)"]
+    lines += ["", "TEAMFIGHTS (start-end | deaths per team)"]
     for t in m["teamfights"]:
-        lines.append(f"{_mmss(t['start'])}-{_mmss(t['end'])} {t['deaths']} deaths")
+        # t["players"] is in the same order as m["players"]
+        dead = {"Radiant": 0, "Dire": 0}
+        for p, tp in zip(m["players"], t["players"]):
+            dead["Radiant" if p["isRadiant"] else "Dire"] += tp["deaths"]
+        lines.append(f"{_mmss(t['start'])}-{_mmss(t['end'])} | deaths: "
+                     f"Radiant {dead['Radiant']}, Dire {dead['Dire']}")
     return "\n".join(lines)
