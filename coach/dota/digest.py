@@ -68,9 +68,13 @@ def digest(m: dict) -> str:
             f"{', '.join(its)}")
 
     gold, xp = m["radiant_gold_adv"], m["radiant_xp_adv"]
-    lines += ["", "ADVANTAGE CURVES, Radiant minus Dire, one value per minute starting at minute 0",
-              "gold_adv: " + " ".join(str(g) for g in gold),
-              "xp_adv:   " + " ".join(str(x) for x in xp)]
+    # One labeled row per minute: the model reads values off the row instead of
+    # counting positions in a list. time_s is the value to cite in timeline evidence.
+    lines += ["", "ADVANTAGE CURVES, Radiant minus Dire (positive = Radiant ahead); "
+                  "value at the start of each minute",
+              "minute | time_s | gold_adv | xp_adv"]
+    for minute, (g, x) in enumerate(zip(gold, xp)):
+        lines.append(f"{minute:>6} | {minute * 60:>6} | {g:>8} | {x:>6}")
 
     lines += ["", "OBJECTIVES (time mm:ss, killer -> what)"]
     by_slot = {p["player_slot"]: player_label(p, heroes) for p in m["players"]}
