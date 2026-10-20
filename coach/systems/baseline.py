@@ -29,7 +29,7 @@ def run_baseline(match_id: int,
     messages = [{"role": "user", "content": f"{match_digest}\n\nQuestion: {question}"}]
     last_error = None
 
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, MAX_ATTEMPTS+1):
 
         result = call(
             messages,
@@ -38,7 +38,6 @@ def run_baseline(match_id: int,
             name=f"baseline-attempt-{attempt}",
             max_tokens=MAX_TOKENS,
         )
-
 
         if result["stop_reason"] == "max_tokens":
             raise RuntimeError("Output truncated at max_tokens; report would be incomplete")

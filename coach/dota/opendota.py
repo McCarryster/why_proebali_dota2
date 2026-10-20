@@ -5,6 +5,7 @@ import urllib.request
 from pathlib import Path
 
 BASE = "https://api.opendota.com/api"
+TIMEOUT_S = 15  # OpenDota can hang on unknown ids; an agent should not wait a minute for that
 RAW_DIR = Path(__file__).resolve().parents[2] / ".cache" / "opendota" / "matches"
 _last_call = 0.0
 
@@ -16,7 +17,7 @@ def _get(path: str):
         time.sleep(wait)
     _last_call = time.time()
     req = urllib.request.Request(BASE + path, headers={"User-Agent": "dota-coach-learning"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
         return json.loads(r.read())
 
 

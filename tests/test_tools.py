@@ -27,3 +27,21 @@ def test_verify_claim_mismatch_names_the_right_minute():
     result = verify_claim(9041878637, ev)
     assert "MISMATCH" in result
     assert "1260s" in result
+
+def test_timeout_becomes_actionable_tool_error(monkeypatch):
+    def slow(_id):
+        raise TimeoutError("The read operation timed out")
+    monkeypatch.setattr("coach.tools.get_match", slow)
+    with pytest.raises(ToolInputError, match="Do not retry") as exc:
+        fetch_match(123)
+    assert "123" in str(exc.value)
+
+
+def test_http_error_becomes_actionable_tool_error(monkeypatch):
+    import urllib.error
+
+    def not_found(_id):
+        raise urllib.error.HTTPError("https://x", 404, "Not Found", None, None)
+    monkeypatch.setattr("coach.tools.get_match", not_found)
+    with pytest.raises(ToolInputError, match="HTTP 404"):
+        fetch_match(123)

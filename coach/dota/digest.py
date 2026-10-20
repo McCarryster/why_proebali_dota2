@@ -95,3 +95,8 @@ def digest(m: dict) -> str:
         lines.append(f"{_mmss(t['start'])}-{_mmss(t['end'])} | deaths: "
                      f"Radiant {dead['Radiant']}, Dire {dead['Dire']}")
     return "\n".join(lines)
+
+
+def npc_hero_labels() -> dict[str, str]:
+    """'npc_dota_hero_dark_willow' -> 'Dark Willow' (the raw logs use npc names)."""
+    return {h["name"]: h["localized_name"] for h in _constant("heroes", "/heroes")}
