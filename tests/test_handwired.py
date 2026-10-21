@@ -1,5 +1,5 @@
 import asyncio
-from coach.registry import definitions, dispatch
+from coach.tools.handwired import definitions, dispatch
 from coach.mcp_server.server import mcp
 
 
@@ -51,7 +51,7 @@ def test_verify_claim_mismatch_is_not_an_error():
 
 
 def test_unparsed_match_is_a_tool_input_error(monkeypatch):
-    monkeypatch.setattr("coach.tools.get_match", lambda _id: {})
+    monkeypatch.setattr("coach.tools.core.get_match", lambda _id: {})
     text, is_error = dispatch("fetch_match", {"match_id": 1})
     assert is_error
     assert "Do not retry" in text

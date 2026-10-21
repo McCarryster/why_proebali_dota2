@@ -5,8 +5,10 @@ from coach.llm import call
 from coach.prompt import DOTA_ANALYST_SYSTEM_PROMPT
 from pydantic import ValidationError
 
+
 MAX_ATTEMPTS = 2
 MAX_TOKENS = 4000
+
 
 REPORT_TOOL = {
     "name": "submit_report",

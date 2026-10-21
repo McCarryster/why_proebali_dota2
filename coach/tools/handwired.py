@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ValidationError
 from coach.schemas import Evidence
-from coach.tools import fetch_match, verify_claim, get_events, ToolInputError, MATCH_ID_DESC, EVIDENCE_DESC, DESCRIPTIONS, PLAYER_DESC, EVENT_TYPE_DESC, START_S_DESC, END_S_DESC
+from coach.tools.core import fetch_match, verify_claim, get_events, ToolInputError, MATCH_ID_DESC, EVIDENCE_DESC, DESCRIPTIONS, PLAYER_DESC, EVENT_TYPE_DESC, START_S_DESC, END_S_DESC
 from coach.dota.events import EventType
 
 
@@ -50,4 +50,4 @@ def dispatch(name: str, args: dict): # when the model calls a tool
     except ToolInputError as e:
         return (str(e), True)
 
-    return (text, False)            # success
+    return (text, False) # success

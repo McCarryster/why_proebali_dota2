@@ -4,8 +4,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from typing import Annotated
 from pydantic import Field
 
-from coach import tools
-from coach.tools import MATCH_ID_DESC, EVIDENCE_DESC, DESCRIPTIONS, PLAYER_DESC, EVENT_TYPE_DESC, START_S_DESC, END_S_DESC
+from coach.tools import core as tools
+from coach.tools.core import MATCH_ID_DESC, EVIDENCE_DESC, DESCRIPTIONS, PLAYER_DESC, EVENT_TYPE_DESC, START_S_DESC, END_S_DESC
 from coach.schemas import Evidence
 from coach.dota.events import EventType
 

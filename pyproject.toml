@@ -14,4 +14,4 @@ dependencies = [
 dev = ["pytest"]
 
 [tool.setuptools]
-packages = ["coach", "coach.dota", "coach.systems"]
+packages = ["coach", "coach.dota", "coach.tools", "coach.systems", "coach.systems.scratch"]

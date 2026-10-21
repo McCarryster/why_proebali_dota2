@@ -1,8 +1,8 @@
 import pytest
 
-from coach.tools import ToolInputError, fetch_match
+from coach.tools.core import ToolInputError, fetch_match
 from coach.schemas import Evidence
-from coach.tools import verify_claim
+from coach.tools.core import verify_claim
 
 
 def test_fetch_match_returns_digest():
@@ -11,7 +11,7 @@ def test_fetch_match_returns_digest():
 
 
 def test_unparsed_match_raises_actionable_error(monkeypatch):
-    monkeypatch.setattr("coach.tools.get_match", lambda _id: {})   # no "version" key
+    monkeypatch.setattr("coach.tools.core.get_match", lambda _id: {})   # no "version" key
     with pytest.raises(ToolInputError, match="Do not retry"):
         fetch_match(123)
 
@@ -31,7 +31,7 @@ def test_verify_claim_mismatch_names_the_right_minute():
 def test_timeout_becomes_actionable_tool_error(monkeypatch):
     def slow(_id):
         raise TimeoutError("The read operation timed out")
-    monkeypatch.setattr("coach.tools.get_match", slow)
+    monkeypatch.setattr("coach.tools.core.get_match", slow)
     with pytest.raises(ToolInputError, match="Do not retry") as exc:
         fetch_match(123)
     assert "123" in str(exc.value)
@@ -42,6 +42,6 @@ def test_http_error_becomes_actionable_tool_error(monkeypatch):
 
     def not_found(_id):
         raise urllib.error.HTTPError("https://x", 404, "Not Found", None, None)
-    monkeypatch.setattr("coach.tools.get_match", not_found)
+    monkeypatch.setattr("coach.tools.core.get_match", not_found)
     with pytest.raises(ToolInputError, match="HTTP 404"):
         fetch_match(123)
