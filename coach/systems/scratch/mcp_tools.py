@@ -6,6 +6,7 @@ Usage:
         defs = tools.definitions()
         text, is_error = await tools.call("get_events", {...})
 """
+
 import sys
 from contextlib import AsyncExitStack
 
@@ -31,3 +32,7 @@ class McpTools:
     async def call(self, name: str, args: dict) -> tuple[str, bool]:
         result = await self._client.call_tool(name, args)
         return result.content[0].text, result.is_error # type: ignore
+
+    async def prompt(self, name: str, args: dict) -> str:
+        p = await self._client.get_prompt(name, args)
+        return p.messages[0].content.text # type: ignore
