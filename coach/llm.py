@@ -58,7 +58,7 @@ def call(messages, *, system=None, tools=None, model=MODEL, max_tokens=3000,
             real_cost = 0.0  # a cache hit costs nothing; keep the original cost in the result
         else:
             t0 = time.time()
-            resp = _client.messages.create(**params)
+            resp = _client.messages.create(**params) # type: ignore
             usage = {"input_tokens": resp.usage.input_tokens,
                      "output_tokens": resp.usage.output_tokens,
                      "cache_read_input_tokens": resp.usage.cache_read_input_tokens or 0,

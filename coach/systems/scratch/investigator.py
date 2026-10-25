@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from coach import llm
 from coach.schemas import Finding
 from coach.systems.scratch.mcp_tools import McpTools
+from coach.systems.scratch.utils import format_errors
 
 
 @dataclass
@@ -40,15 +41,63 @@ async def run_investigator(hypothesis: str, match_id: int, tools: McpTools,
 
     while tool_calls < max_tool_calls:
         reply = llm_call(messages, system=system, tools=defs, name="investigator")
+        
+        if reply["stop_reason"] == "max_tokens":
+            raise RuntimeError("Hit max tokens limit")
+        
+        tool_use_blocks = [x for x in reply['content'] if x['type'] == 'tool_use']
+        if not tool_use_blocks:
+            return InvestigationResult(None, tool_calls, "no_tool_call")
 
-        # TODO 1: if reply["stop_reason"] == "max_tokens": raise RuntimeError(...)
-        # TODO 2: tool_use_blocks = the blocks of reply["content"] whose "type" is "tool_use"
-        #         if there are none: return InvestigationResult(None, tool_calls, "no_tool_call")
-        # TODO 3: if one block is named "submit_finding": validate it and verify its evidence
-        #         (see the spec); return, or build an is_error tool_result and keep looping
-        # TODO 4: otherwise run each tool with `await tools.call(name, input)` and build one
-        #         tool_result block per tool_use block
-        # TODO 5: append the assistant reply and ONE user message holding ALL tool_results
-        ...
+        submit = next((x for x in tool_use_blocks if x["name"] == "submit_finding"), None)
+        others = [x for x in tool_use_blocks if x is not submit]
+        # A submit only counts when it is alone: otherwise the model wrote it before seeing
+        # the results of its other tool calls.
+        if submit is not None and not others:
+            finding = None
+            try:
+                finding = Finding.model_validate(submit["input"])
+            except ValidationError as e:
+                problems = [format_errors(e)]
+            else:
+                problems = []
+                for ev in finding.evidence:
+                    text, is_error = await tools.call("verify_claim", {"match_id": match_id, "evidence": ev.model_dump()})
+                    if is_error or not text.startswith("OK"):
+                        problems.append(text) # e.g. "MISMATCH: gold_adv at 1320s is -50352, not -30596 (... 1260s)"
+
+            if not problems:                                              # outcome 1: all good
+                return InvestigationResult(finding, tool_calls, "submitted")
+
+            attempts_left -= 1
+            if attempts_left == 0:                                        # outcome 2: no more chances
+                return InvestigationResult(None, tool_calls, "invalid")
+
+            messages = messages + [                                       # outcome 3: tell the model, let it fix it
+                {"role": "assistant", "content": reply["content"]},
+                {"role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": submit["id"], "is_error": True,
+                    "content": "Your finding failed verification:\n" + "\n".join(problems)
+                               + "\nFix it and call submit_finding again.",
+                }]},
+            ]
+            continue                                                      # back to the top of the while loop
+
+        results = []
+        for block in tool_use_blocks:
+            if block is submit:  # only reachable when submit_finding was mixed with other tools
+                results.append({"type": "tool_result", "tool_use_id": block["id"], "is_error": True,
+                                "content": "submit_finding must be called alone, after you have seen the "
+                                           "results of your other tool calls. Call it again when you are ready."})
+                continue
+            text, is_error = await tools.call(block["name"], block["input"])
+            tool_calls += 1
+            results.append({"type": "tool_result", "tool_use_id": block["id"], 
+                            "content": text, "is_error": is_error})
+
+        messages = messages + [
+            {"role": "assistant", "content": reply["content"]},
+            {"role": "user", "content": results},
+        ]
 
     return InvestigationResult(None, tool_calls, "budget")
