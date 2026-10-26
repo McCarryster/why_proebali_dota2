@@ -20,37 +20,77 @@ Severity = Literal["minor", "major", "decisive"]
 
 
 
+# Fields that must be absent for each kind of evidence (the required ones are checked below).
+FORBIDDEN_FIELDS = {
+    "stat": ("time_s", "event_type"),
+    "timeline": ("player", "event_type"),
+    "event": ("metric", "value"),
+}
+
+
 class Evidence(BaseModel):
-    player: str | None = Field(default=None, description="Player label exactly as in the match digest: 'Hero (Team)', e.g. 'Drow Ranger (Radiant)'")
-    kind: Literal["stat", "timeline"] = Field(description="'stat': an end-of-match number for one player (needs player, no time_s). 'timeline': the Radiant-minus-Dire gold or xp advantage at a given minute (needs time_s, no player).")
-    time_s: int | None = Field(default=None, description="Match time in seconds, only for kind=timeline; the curves have one value per minute, so use minute*60", multiple_of=60)
-    metric: Metric = Field(description="For kind='stat': kills, deaths, assists, last_hits, gold_per_min, xp_per_min, net_worth, hero_damage, tower_damage. For kind='timeline': gold_adv or xp_adv.")
-    value: int = Field(description="The number exactly as in the data: the player's end-of-match stat, or the Radiant-minus-Dire advantage at time_s (negative means Dire leads).")
+    kind: Literal["stat", "timeline", "event"] = Field(
+        description="'stat': an end-of-match number for one player (needs player, metric, value). "
+                    "'timeline': the Radiant-minus-Dire gold or xp advantage at a minute "
+                    "(needs metric, time_s, value). 'event': one death or kill of a player at an exact "
+                    "second (needs player, event_type, time_s).")
+    player: str | None = Field(
+        default=None,
+        description="Player label exactly as in the match digest: 'Hero (Team)', e.g. 'Drow Ranger (Radiant)'. "
+                    "For kind='stat' and kind='event'; omit for kind='timeline'.")
+    event_type: Literal["deaths", "kills"] | None = Field(
+        default=None,
+        description="Only for kind='event'. 'deaths': the player died at time_s. 'kills': the player killed "
+                    "a hero at time_s. Take both from the get_events output.")
+    time_s: int | None = Field(
+        default=None, ge=0,
+        description="Seconds from match start. kind='timeline': minute * 60 (the curves have one value per "
+                    "minute). kind='event': the exact second shown in get_events, e.g. 372 for 6:12. "
+                    "Omit for kind='stat'.")
+    metric: Metric | None = Field(
+        default=None,
+        description="For kind='stat': kills, deaths, assists, last_hits, gold_per_min, xp_per_min, net_worth, "
+                    "hero_damage, tower_damage. For kind='timeline': gold_adv or xp_adv. Omit for kind='event'.")
+    value: int | None = Field(
+        default=None,
+        description="The number exactly as in the data: the player's end-of-match stat, or the "
+                    "Radiant-minus-Dire advantage at time_s (negative means Dire leads). Omit for kind='event'.")
 
     @model_validator(mode="after")
     def _check_kind(self):
         if self.kind == "stat":
             if self.player is None:
-                raise ValueError(
-                    "kind='stat' requires player as 'Hero (Team)', e.g. 'Drow Ranger (Radiant)'; none was given")
+                raise ValueError("kind='stat' requires player as 'Hero (Team)', e.g. 'Drow Ranger (Radiant)'; none was given")
             if self.metric not in STAT_METRICS:
                 raise ValueError(
                     f"kind='stat' needs a player stat metric ({', '.join(STAT_METRICS)}); "
                     f"got '{self.metric}'. Use kind='timeline' for gold_adv or xp_adv")
-            if self.time_s is not None:
-                raise ValueError(
-                    "kind='stat' is an end-of-match number and must not have time_s; omit time_s")
-        else:  # timeline
+            if self.value is None:
+                raise ValueError("kind='stat' requires value, the number from the PLAYERS table; none was given")
+
+        if self.kind == "timeline":
             if self.time_s is None:
+                raise ValueError("kind='timeline' requires time_s, the minute * 60 (e.g. 720 for minute 12); none was given")
+            if self.time_s % 60 != 0:
                 raise ValueError(
-                    "kind='timeline' requires time_s, the minute * 60 (e.g. 720 for minute 12); none was given")
+                    f"kind='timeline' needs time_s to be a multiple of 60 (minute * 60, e.g. 720 for minute 12); got {self.time_s}")
             if self.metric not in TIMELINE_METRICS:
                 raise ValueError(
-                    f"kind='timeline' needs metric gold_adv or xp_adv; got '{self.metric}'. "
-                    "Use kind='stat' for player stats")
-            if self.player is not None:
-                raise ValueError(
-                    "kind='timeline' is a team-level curve and must not have player; omit player")
+                    f"kind='timeline' needs metric gold_adv or xp_adv; got '{self.metric}'. Use kind='stat' for player stats")
+            if self.value is None:
+                raise ValueError("kind='timeline' requires value, the advantage from the curves table; none was given")
+
+        if self.kind == "event":
+            if self.player is None:
+                raise ValueError("kind='event' requires player as 'Hero (Team)', e.g. 'Dragon Knight (Radiant)'; none was given")
+            if self.event_type is None:
+                raise ValueError("kind='event' requires event_type, 'deaths' or 'kills'; none was given")
+            if self.time_s is None:
+                raise ValueError("kind='event' requires time_s, the exact second from get_events (e.g. 372 for 6:12); none was given")
+        
+        extra = [name for name in FORBIDDEN_FIELDS[self.kind] if getattr(self, name) is not None]
+        if extra:
+            raise ValueError(f"kind='{self.kind}' must not have {', '.join(extra)}; omit {'it' if len(extra) == 1 else 'them'}")
         return self
 
 

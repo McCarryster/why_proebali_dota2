@@ -25,8 +25,8 @@ def q(event_type, **kw):
 
 def test_deaths_name_the_killer_with_team():
     text = q("deaths")
-    assert "1:40 killed by Tusk (Dire)" in text
-    assert "5:00 killed by tower/creep/neutral" in text
+    assert "1:40 (100s) killed by Tusk (Dire)" in text
+    assert "5:00 (300s) killed by tower/creep/neutral" in text
 
 
 def test_window_is_start_inclusive_end_exclusive():

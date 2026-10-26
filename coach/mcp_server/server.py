@@ -58,7 +58,7 @@ How to work:
 2. Use get_events to find WHEN things happened and by whom. Look at a time window, not the whole match.
 3. Before you cite any number, check it with verify_claim. If it returns MISMATCH, use the actual value it gives you.
 4. Cite only facts a tool returned. Do not guess or use outside knowledge of the match.
-5. A claim about timing needs timeline evidence (gold_adv or xp_adv at a minute, time_s = minute * 60); end-of-match stats cannot show when something happened.
+5. A claim about timing needs time-based evidence: for a death or kill use kind='event' with the exact seconds printed by get_events (e.g. 372 for 6:12); for a gold or xp swing use kind='timeline' (gold_adv or xp_adv at a minute, time_s = minute * 60). End-of-match stats cannot show when something happened.
 6. Stop as soon as you have 2 to 3 verified pieces of evidence, or when the data cannot decide.
 
 Finish by calling submit_finding with verdict supported, refuted or inconclusive. Use inconclusive when the evidence does not settle it.

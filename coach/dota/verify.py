@@ -28,6 +28,8 @@ def verify_evidence(match: dict, ev: Evidence, heroes: dict[int, str] | None = N
     heroes = heroes or hero_names()
     if ev.kind == "stat":
         return _verify_stat(match, ev, heroes)
+    if ev.kind == "event":
+        return _verify_event(match, ev, heroes)
     return _verify_timeline(match, ev)
 
 
@@ -41,6 +43,26 @@ def _verify_stat(match: dict, ev: Evidence, heroes: dict[int, str]) -> VerifyRes
     if actual != ev.value:
         return VerifyResult(False, f"{ev.player} {ev.metric} is {actual}, not {ev.value}")
     return VerifyResult(True, f"{ev.player} {ev.metric} = {actual}")
+
+
+def _verify_event(match: dict, ev: Evidence, heroes: dict[int, str]) -> VerifyResult:
+    """A death/kill must exist in the player's log at exactly ev.time_s (seconds)."""
+    by_label = {player_label(p, heroes): p for p in match["players"]}
+    player = by_label.get(ev.player)
+    if player is None:
+        return VerifyResult(False, f"Unknown player '{ev.player}'. Valid players: "
+                                   f"{', '.join(sorted(by_label))}")
+    log = player.get("deaths_log" if ev.event_type == "deaths" else "kills_log", [])
+    times = sorted(e["time"] for e in log)
+    if ev.time_s in times:
+        return VerifyResult(True, f"{ev.player} {ev.event_type} at {ev.time_s}s")
+    msg = f"{ev.player} has no {ev.event_type[:-1]} at {ev.time_s}s"
+    if times:
+        shown = ", ".join(f"{t}s" for t in times[:10]) + (" ..." if len(times) > 10 else "")
+        msg += f"; actual {ev.event_type} at: {shown}"
+    else:
+        msg += f"; this player has no {ev.event_type} at all"
+    return VerifyResult(False, msg)
 
 
 def _verify_timeline(match: dict, ev: Evidence) -> VerifyResult:

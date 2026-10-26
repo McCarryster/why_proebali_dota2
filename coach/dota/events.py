@@ -65,7 +65,7 @@ def player_events(match: dict, player: str, event_type: str, start_s: int = 0,
         return f"{player} {event_type} {window}: none"
     shown = rows[:limit]
     out = [f"{player} {event_type} {window}: {len(rows)} event(s)"]
-    out += [f"{_mmss(t)} {text}" for t, text in shown]
+    out += [f"{_mmss(t)} ({t}s) {text}" for t, text in shown]   # seconds: copy into event evidence
     if len(rows) > limit:
         out.append(f"... {len(rows) - limit} more; narrow the window with start_s/end_s")
     return "\n".join(out)

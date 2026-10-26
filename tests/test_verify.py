@@ -72,3 +72,37 @@ def test_time_beyond_curve():
 def test_every_stat_metric_is_looked_up(metric):
     actual = MATCH["players"][0][metric]
     assert check(stat(metric=metric, value=actual)).ok
+
+
+def event(time_s, event_type="deaths", player="Drow Ranger (Radiant)"):
+    return Evidence(kind="event", player=player, event_type=event_type, time_s=time_s)
+
+
+MATCH_WITH_EVENTS = {
+    "players": [dict(MATCH["players"][0],
+                     deaths_log=[{"time": 100, "key": "npc_dota_hero_tusk"}, {"time": 300, "key": "x"}],
+                     kills_log=[{"time": 250, "key": "npc_dota_hero_tusk"}]),
+                MATCH["players"][1]],
+    "radiant_gold_adv": MATCH["radiant_gold_adv"], "radiant_xp_adv": MATCH["radiant_xp_adv"],
+}
+
+
+def test_event_exact_second_is_ok():
+    assert verify_evidence(MATCH_WITH_EVENTS, event(100), HEROES).ok
+    assert verify_evidence(MATCH_WITH_EVENTS, event(250, "kills"), HEROES).ok
+
+
+def test_event_wrong_second_lists_the_real_ones():
+    r = verify_evidence(MATCH_WITH_EVENTS, event(101), HEROES)
+    assert not r.ok
+    assert "no death at 101s" in r.message and "100s, 300s" in r.message
+
+
+def test_event_for_player_without_such_events():
+    r = verify_evidence(MATCH_WITH_EVENTS, event(100, player="Tusk (Dire)"), HEROES)
+    assert not r.ok and "no deaths at all" in r.message
+
+
+def test_event_unknown_player_lists_valid_players():
+    r = verify_evidence(MATCH_WITH_EVENTS, event(100, player="Drow (Radiant)"), HEROES)
+    assert not r.ok and "Valid players" in r.message

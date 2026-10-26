@@ -73,7 +73,43 @@ def test_timeline_rules(fields, why):
         Evidence(kind="timeline", **fields)
 
 
-def test_time_must_be_whole_minute():
-    with pytest.raises(ValidationError) as exc:
+def test_timeline_time_must_be_a_whole_minute():
+    # The rule lives in the model validator now (event times are exact seconds), so the error is model-level.
+    with pytest.raises(ValidationError, match="multiple of 60"):
         Evidence(kind="timeline", metric="gold_adv", time_s=725, value=-1)
-    assert error_locs(exc) == [("time_s",)]
+
+
+def test_valid_event_evidence():
+    e = Evidence(kind="event", player="Dragon Knight (Radiant)", event_type="deaths", time_s=372)
+    assert e.metric is None and e.value is None
+
+
+def test_event_time_is_an_exact_second_not_a_minute():
+    Evidence(kind="event", player="Dragon Knight (Radiant)", event_type="deaths", time_s=373)  # no error
+
+
+@pytest.mark.parametrize("fields, fragment", [
+    (dict(event_type="deaths", time_s=372), "requires player"),
+    (dict(player="Dragon Knight (Radiant)", time_s=372), "requires event_type"),
+    (dict(player="Dragon Knight (Radiant)", event_type="deaths"), "requires time_s"),
+    (dict(player="Dragon Knight (Radiant)", event_type="deaths", time_s=372, value=9), "must not have value"),
+    (dict(player="Dragon Knight (Radiant)", event_type="deaths", time_s=372, metric="deaths"), "must not have metric"),
+])
+def test_event_rules(fields, fragment):
+    with pytest.raises(ValidationError, match=fragment):
+        Evidence(kind="event", **fields)
+
+
+def test_stat_must_not_carry_event_fields():
+    with pytest.raises(ValidationError, match="must not have event_type"):
+        make_evidence(event_type="deaths")
+
+
+def test_a_valid_stat_still_passes():
+    # Regression: an earlier draft compared the player against the metrics list and rejected every stat.
+    assert make_evidence().player == "Drow Ranger (Radiant)"
+
+
+def test_timeline_must_not_carry_a_player():
+    with pytest.raises(ValidationError, match="must not have player"):
+        Evidence(kind="timeline", metric="gold_adv", time_s=720, value=-1, player="Tusk (Radiant)")
