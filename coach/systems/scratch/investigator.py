@@ -5,7 +5,7 @@ finding is then checked deterministically with `verify_claim`. A wrong finding i
 the model with the actual values (bounded retries).
 """
 from dataclasses import dataclass
-
+import asyncio
 from pydantic import ValidationError
 
 from coach import llm
@@ -40,8 +40,7 @@ async def run_investigator(hypothesis: str, match_id: int, tools: McpTools,
     attempts_left = max_attempts
 
     while tool_calls < max_tool_calls:
-        reply = llm_call(messages, system=system, tools=defs, name="investigator")
-        
+        reply = await asyncio.to_thread(llm_call, messages, system=system, tools=defs, name="investigator")
         if reply["stop_reason"] == "max_tokens":
             raise RuntimeError("Hit max tokens limit")
         

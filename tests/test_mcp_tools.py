@@ -50,3 +50,13 @@ def test_investigator_prompt_is_served_with_blanks_filled():
     text = asyncio.run(run())
     assert "Radiant lost the 10:41 fight" in text
     assert "verify_claim" in text and "get_events" in text and "submit_finding" in text
+
+
+def test_planner_prompt_is_served_with_blanks_filled():
+    async def run():
+        async with McpTools() as t:
+            return await t.prompt("planner", {"question": "What were the key mistakes?",
+                                              "match_id": "9041878637"})
+    text = asyncio.run(run())
+    assert "What were the key mistakes?" in text and "9041878637" in text
+    assert "submit_plan" in text

@@ -65,5 +65,31 @@ Finish by calling submit_finding with verdict supported, refuted or inconclusive
 """
 
 
+@mcp.prompt(description="Instructions for the planner: turn one question about one match into testable hypotheses.")
+def planner(
+    question: Annotated[str, Field(description="The question to answer, e.g. 'What were the key mistakes?'")],
+    match_id: Annotated[int, Field(description=MATCH_ID_DESC)],
+) -> str:
+    return f"""\
+You plan the investigation of Dota 2 match {match_id}. You will receive a compact overview of the match.
+
+Question to answer: {question}
+
+Propose 3 hypotheses (never more than 5) that could answer the question. Each one is later tested by a separate investigator who can only use these data:
+- the overview you are given (end-of-match stats, per-minute gold and xp advantage, buildings destroyed, teamfights with deaths per team);
+- timestamped deaths, kills and purchases of any single player.
+
+Rules:
+1. Each statement is ONE short sentence (at most 160 characters) naming ONE cause, with no numbers and no guesses ("likely", "probably"). Put the supporting numbers in the rationale.
+2. Every hypothesis must be falsifiable with the data above. Do not propose things the data cannot show (positioning, drafts, communication, skill).
+3. Make them about different causes (for example a fight, a player, the economy). Do not repeat the same idea in other words, and do not write hypotheses that depend on each other.
+4. Prefer what the overview points at: a lopsided teamfight, the minute where the gold lead flips, a player with extreme stats.
+5. Read the overview carefully: use the deaths per team shown for each teamfight to say who won it, and check a number before you rely on it.
+6. Number them H1, H2, H3, most promising first, and give a rationale (one or two sentences) that names the evidence in the overview.
+
+Finish by calling submit_plan.
+"""
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

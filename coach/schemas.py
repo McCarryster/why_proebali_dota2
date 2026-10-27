@@ -109,6 +109,33 @@ class Report(BaseModel):
     unresolved: list[str] = Field(default_factory=list, description="Open questions the data could not answer")
 
 
+class Hypothesis(BaseModel):
+    id: str = Field(pattern=r"^H\d+$", description="Short unique id: 'H1', 'H2', 'H3', ... numbered in order, no repeats.")
+    statement: str = Field(
+        max_length=160,
+        description="ONE short falsifiable sentence naming ONE cause, at most 160 characters, no numbers and no "
+                    "guesses, e.g. 'Dragon Knight kept dying before minute 11, weakening Radiant before the 10:41 "
+                    "fight.' Put the supporting numbers in the rationale.")
+    rationale: str = Field(description="One sentence on why this is worth testing, pointing at what in the match overview suggests it.")
+
+
+class Plan(BaseModel):
+    hypotheses: list[Hypothesis] = Field(
+        min_length=1, max_length=5,
+        description="1 to 5 distinct hypotheses that could explain the result or the key mistakes, "
+                    "most promising first. Each is investigated separately, so make them independent.")
+
+    @model_validator(mode="after")
+    def _unique_ids(self):
+        ids = [h.id for h in self.hypotheses]
+        if len(ids) != len(set(ids)):
+            dupes = sorted({i for i in ids if ids.count(i) > 1})
+            raise ValueError(
+                f"hypothesis ids must be unique; repeated: {', '.join(dupes)}. "
+                "Number them H1, H2, H3, ... once each")
+        return self
+
+
 if __name__ == "__main__":
     import json
     print(json.dumps(Evidence.model_json_schema(), indent=1))
