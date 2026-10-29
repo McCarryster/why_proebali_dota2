@@ -3,6 +3,7 @@ import asyncio
 from coach.schemas import Plan, Hypothesis
 from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.orchestrator import investigate_all
+from coach.systems.scratch.investigator import InvestigationResult
 
 from tests.fakes import RoutedFakeLLM, reply, tool_use
 
@@ -28,7 +29,30 @@ def run(llm, **kwargs):
     return asyncio.run(go())
 
 
-def test_investigate_all():
-    llm = RoutedFakeLLM({PLAN.hypotheses[0].statement, })
+def test_each_hypothesis_gets_its_own_result():
+    llm = RoutedFakeLLM({PLAN.hypotheses[0].statement: [reply(tool_use("submit_finding", finding("CLAIM-1")))],
+                         PLAN.hypotheses[1].statement: [reply(tool_use("submit_finding", finding("CLAIM-2")))]})
     results = run(llm)
-    assert ...   # three of them
+    assert set(results) == {"H1", "H2"}
+
+    r1 = results["H1"]
+    r2 = results["H2"]
+    assert isinstance(r1, InvestigationResult)
+    assert isinstance(r2, InvestigationResult)
+    assert r1.finding is not None
+    assert r2.finding is not None
+    assert r1.finding.claim == "CLAIM-1"
+    assert r2.finding.claim == "CLAIM-2"
+
+
+def test_one_failing_investigator_does_not_lose_the_others():
+    llm = RoutedFakeLLM({PLAN.hypotheses[0].statement: [reply(tool_use("submit_finding", finding("CLAIM-1")))],
+                         PLAN.hypotheses[1].statement: [reply(stop_reason="max_tokens")]})   # H2 raises RuntimeError
+    results = run(llm)
+
+    assert set(results) == {"H1", "H2"}
+    r1 = results["H1"]
+    assert isinstance(r1, InvestigationResult)
+    assert r1.finding is not None
+    assert r1.finding.claim == "CLAIM-1"
+    assert isinstance(results["H2"], RuntimeError)       # the error is a value in the dict, not raised

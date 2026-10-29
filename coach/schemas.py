@@ -1,5 +1,6 @@
+import re
 from typing import Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # Names match OpenDota's player keys, so verify_claim is a direct lookup.
@@ -100,6 +101,17 @@ class Finding(BaseModel):
     verdict: Verdict = Field(description="Whether the match data supports the hypothesis being investigated")
     severity: Severity = Field(description="How much this contributed to the result")
     evidence: list[Evidence] = Field(min_length=1, description="Facts from the match that support the claim")
+
+    @field_validator("claim")
+    @classmethod
+    def _claim_is_plain_text(cls, claim: str) -> str:
+        # Seen in a real run: the model's tool-call markup ('</claim>', '<parameter name="verdict">')
+        # leaked into this string and swallowed the verdict. Say so, or the retry repeats the mistake.
+        # The pattern needs a letter after '<', so ordinary text like 'deaths < 5' passes.
+        if re.search(r"</?[A-Za-z]", claim):
+            raise ValueError("claim must be plain text but contains markup such as '</claim>' or '<parameter'. "
+                             "Write only the claim sentence here and put the verdict in the separate 'verdict' field")
+        return claim
 
 
 class Report(BaseModel):

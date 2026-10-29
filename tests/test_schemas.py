@@ -149,3 +149,27 @@ def test_hypothesis_statement_is_limited_to_160_characters():
     with pytest.raises(ValidationError) as exc:
         Hypothesis(**dict(ok, statement="x" * 161))
     assert [e["loc"] for e in exc.value.errors()] == [("statement",)]
+
+
+# Seen in a real run: the model's tool-call markup leaked into the claim and swallowed the verdict.
+LEAKED_CLAIM = ("Tusk still bought blink at 9:17 and Scepter at 15:09."
+                "</claim>\n<parameter name=\"verdict\">refuted")
+
+
+def test_claim_with_leaked_markup_is_rejected_and_the_claim_is_named():
+    fields = make_finding_fields(claim=LEAKED_CLAIM)
+    del fields["verdict"]                       # the real failure: markup swallowed the verdict
+    with pytest.raises(ValidationError) as exc:
+        Finding(**fields)
+    locs = error_locs(exc)
+    assert ("claim",) in locs                   # the fact the model needs to see
+    assert ("verdict",) in locs
+
+
+@pytest.mark.parametrize("claim", [
+    "Dragon Knight died 9 times, fewer than Drow Ranger's 12.",
+    "Radiant had < 5 towers left and deaths <5 per player were rare.",
+    "Gold lead went from +3012 at 11:00 to -2334 at 12:00 (a 5346 swing).",
+])
+def test_ordinary_claims_are_not_mistaken_for_markup(claim):
+    assert Finding(**make_finding_fields(claim=claim)).claim == claim
