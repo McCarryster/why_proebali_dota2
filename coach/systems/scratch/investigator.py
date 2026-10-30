@@ -19,6 +19,7 @@ class InvestigationResult:
     finding: Finding | None
     tool_calls: int
     reason: str          # "submitted" | "budget" | "invalid" | "no_tool_call"
+    tokens: int = 0
 
 
 # A LOCAL tool: it is the loop's way out, not something the MCP server offers.
@@ -39,14 +40,17 @@ async def run_investigator(hypothesis: str, match_id: int, tools: McpTools,
     tool_calls = 0
     attempts_left = max_attempts
 
+    tokens = 0
     while tool_calls < max_tool_calls:
         reply = await asyncio.to_thread(llm_call, messages, system=system, tools=defs, name="investigator")
+        tokens += reply["usage"]["input_tokens"] + reply["usage"]["output_tokens"]
+
         if reply["stop_reason"] == "max_tokens":
             raise RuntimeError("Hit max tokens limit")
         
         tool_use_blocks = [x for x in reply['content'] if x['type'] == 'tool_use']
         if not tool_use_blocks:
-            return InvestigationResult(None, tool_calls, "no_tool_call")
+            return InvestigationResult(finding=None, tool_calls=tool_calls, reason="no_tool_call", tokens=tokens)
 
         submit = next((x for x in tool_use_blocks if x["name"] == "submit_finding"), None)
         others = [x for x in tool_use_blocks if x is not submit]
@@ -66,11 +70,11 @@ async def run_investigator(hypothesis: str, match_id: int, tools: McpTools,
                         problems.append(text) # e.g. "MISMATCH: gold_adv at 1320s is -50352, not -30596 (... 1260s)"
 
             if not problems:                                              # outcome 1: all good
-                return InvestigationResult(finding, tool_calls, "submitted")
+                return InvestigationResult(finding=finding, tool_calls=tool_calls, reason="submitted", tokens=tokens)
 
             attempts_left -= 1
             if attempts_left == 0:                                        # outcome 2: no more chances
-                return InvestigationResult(None, tool_calls, "invalid")
+                return InvestigationResult(finding=None, tool_calls=tool_calls, reason="invalid", tokens=tokens)
 
             messages = messages + [                                       # outcome 3: tell the model, let it fix it
                 {"role": "assistant", "content": reply["content"]},
@@ -99,4 +103,4 @@ async def run_investigator(hypothesis: str, match_id: int, tools: McpTools,
             {"role": "user", "content": results},
         ]
 
-    return InvestigationResult(None, tool_calls, "budget")
+    return InvestigationResult(finding=None, tool_calls=tool_calls, reason="budget", tokens=tokens)

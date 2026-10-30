@@ -7,7 +7,9 @@ from langfuse import get_client, propagate_attributes
 from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.planner import make_plan
 
+
 lf = get_client()            # AFTER the coach imports (they load .env)
+
 
 DEFAULT_QUESTION = "What were the key mistakes?"
 

@@ -114,11 +114,14 @@ class Finding(BaseModel):
         return claim
 
 
-class Report(BaseModel):
+class ReportDraft(BaseModel):
     answer: str = Field(description="Direct answer to the question, 2-4 sentences")
     turning_point_s: int | None = Field(default=None, description="Match time in seconds when the game swung; the data resolution is one minute. None if there was no clear swing")
-    key_findings: list[Finding] = Field(description="The most important findings, most severe first")
     unresolved: list[str] = Field(default_factory=list, description="Open questions the data could not answer")
+
+
+class Report(ReportDraft):
+    key_findings: list[Finding] = Field(description="The most important findings, most severe first")
 
 
 class Hypothesis(BaseModel):

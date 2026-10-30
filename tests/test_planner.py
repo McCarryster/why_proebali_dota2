@@ -19,10 +19,10 @@ GOOD_PLAN = {"hypotheses": [hyp("H1"), hyp("H2", "Dragon Knight died too often."
 DUPLICATE_IDS_PLAN = {"hypotheses": [hyp("H1"), hyp("H1", "Dragon Knight died too often.")]}
 
 
-def run(llm, match_id=MATCH):
+def run(llm, match_id=MATCH, **kwargs):
     async def go():
         async with McpTools() as tools:
-            return await make_plan(QUESTION, match_id, tools, llm_call=llm)
+            return await make_plan(QUESTION, match_id, tools, llm_call=llm, **kwargs)
     return asyncio.run(go())
 
 
@@ -68,3 +68,18 @@ def test_unfetchable_match_raises_with_the_tool_message(monkeypatch):
     with pytest.raises(RuntimeError, match="Could not fetch match"):
         run(llm, match_id="abc")
     assert llm.calls == []                           # the model was never asked
+
+
+def test_already_tested_hypotheses_reach_the_prompt():
+    llm = FakeLLM([reply(tool_use("submit_plan", GOOD_PLAN))])
+    run(llm, avoid=["Dragon Knight died too often.", "Radiant lost the 10:41 fight."])
+
+    system = llm.calls[0]["system"]
+    assert "Already tested" in system
+    assert "Dragon Knight died too often.\nRadiant lost the 10:41 fight." in system
+
+
+def test_first_round_prompt_has_no_already_tested_block():
+    llm = FakeLLM([reply(tool_use("submit_plan", GOOD_PLAN))])
+    run(llm)
+    assert "Already tested" not in llm.calls[0]["system"]

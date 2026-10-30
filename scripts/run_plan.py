@@ -7,7 +7,6 @@ from langfuse import get_client, propagate_attributes
 from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.planner import make_plan
 from coach.systems.scratch.orchestrator import investigate_all
-from coach.systems.scratch.investigator import InvestigationResult
 
 
 lf = get_client()
@@ -17,9 +16,9 @@ DEFAULT_QUESTION = "What were the key mistakes?"
 
 async def main(match_id: int, question: str):
     run_id = uuid.uuid4().hex[:8]
-    with lf.start_as_current_observation(as_type="span", name="planner-run",
+    with lf.start_as_current_observation(as_type="span", name="plan-and-investigate",
                                          input={"question": question, "match_id": match_id}) as root:
-        with propagate_attributes(trace_name="planner-run",
+        with propagate_attributes(trace_name="plan-and-investigate",
                                   metadata={"system": "scratch", "match_id": str(match_id), "run_id": run_id}):
             async with McpTools() as tools:
                 plan = await make_plan(question, match_id, tools)

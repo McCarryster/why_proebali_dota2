@@ -14,12 +14,14 @@ SUBMIT_PLAN_TOOL = {
 }
 
 
-async def make_plan(question: str, match_id: int, tools: McpTools, llm_call=llm.call) -> Plan:
+async def make_plan(question: str, match_id: int, tools: McpTools, llm_call=llm.call, avoid: list[str] | None = None) -> Plan:
     overview, is_error = await tools.call("fetch_match", {"match_id": match_id})
     if is_error:
         raise RuntimeError(f"Could not fetch match {match_id}: {overview}")
     
-    system = await tools.prompt("planner", {"question": question, "match_id": str(match_id)})
+    # system = await tools.prompt("planner", {"question": question, "match_id": str(match_id)})
+    system = await tools.prompt("planner", {"question": question, "match_id": str(match_id),
+                                        "avoid": "\n".join(avoid or [])})
     messages = [{"role": "user", "content": overview}]
 
     for _ in range(2):
