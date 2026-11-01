@@ -1,8 +1,11 @@
 import asyncio
 
+import pytest
+
 from coach.schemas import Plan, Hypothesis
 from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.orchestrator import investigate_all, run_orchestrator
+from coach.systems.scratch.checkpoint import load_checkpoint
 from coach.systems.scratch.investigator import InvestigationResult
 
 from tests.fakes import RoutedFakeLLM, reply, tool_use
@@ -97,3 +100,71 @@ def test_replan_after_an_inconclusive_round_then_finish():
     assert "Radiant lost the fight." in planner_calls[1]["system"]  # the replan was told what was already tried
     # Each fake reply reports 100 + 50 tokens and each investigator made exactly one call (the planner is not counted).
     assert state.tokens_spent == 3 * 150
+    # Every round leaves its decision in the state, in order, so a trace can explain why the loop stopped.
+    assert [d.split(":")[0] for d in state.decisions] == ["replan", "finish"]
+
+
+PLANNER_KEY = "You plan the investigation"
+REPORTER_KEY = "You write the final report"
+DRAFT = {"answer": "ANSWER", "turning_point_s": None, "unresolved": []}
+
+
+def run_with_checkpoint(llm, path, q="QUESTION-X"):
+    async def go():
+        async with McpTools() as tools:
+            return await run_orchestrator(q, MATCH, tools, llm_call=llm, checkpoint_path=path)
+    return asyncio.run(go())
+
+
+def test_resume_after_a_crash_in_the_report_skips_all_earlier_work(tmp_path):
+    path = tmp_path / "checkpoint.json"
+    ok = [reply(tool_use("submit_finding", finding("CLAIM-1")))]
+    ok2 = [reply(tool_use("submit_finding", finding("CLAIM-2")))]
+    first = RoutedFakeLLM({
+        PLANNER_KEY: [reply(tool_use("submit_plan", plan_input("Radiant lost the fight.", "Dragon Knight died too often.")))],
+        "Radiant lost the fight.": ok,
+        "Dragon Knight died too often.": ok2,
+        # no reporter route: the run crashes when it tries to write the report
+    })
+    with pytest.raises(AssertionError, match="no route"):
+        run_with_checkpoint(first, path)
+
+    saved = load_checkpoint(path)
+    assert saved is not None and saved.plan is None           # the rounds were finished and saved
+    assert len(saved.state.findings) == 2
+
+    second = RoutedFakeLLM({REPORTER_KEY: [reply(tool_use("submit_report", DRAFT))]})   # nothing else is available
+    result = run_with_checkpoint(second, path)
+
+    assert [c["key"] for c in second.calls] == [REPORTER_KEY]  # no planner, no investigators
+    assert [f.claim for f in result.report.key_findings] == ["CLAIM-1", "CLAIM-2"]
+
+
+def test_resume_after_a_crash_in_the_replan_does_not_plan_round_one_again(tmp_path):
+    path = tmp_path / "checkpoint.json"
+    first = RoutedFakeLLM({
+        PLANNER_KEY: [reply(tool_use("submit_plan", plan_input("Radiant lost the fight.", "Dragon Knight died too often.")))],
+        "Radiant lost the fight.": [reply(tool_use("submit_finding", finding("CLAIM-1")))],
+        "Dragon Knight died too often.": [reply(tool_use("submit_finding", dict(finding("CLAIM-2"), verdict="inconclusive")))],
+        # only one planner reply: the replan after round 1 crashes
+    })
+    with pytest.raises(AssertionError, match="ran out of replies"):
+        run_with_checkpoint(first, path)
+
+    saved = load_checkpoint(path)
+    assert saved is not None and saved.plan is not None       # the round-1 plan was saved
+    assert [h.id for h in saved.plan.hypotheses] == ["H1", "H2"]
+
+    second = RoutedFakeLLM({
+        PLANNER_KEY: [reply(tool_use("submit_plan", plan_input("Tusk bought blink late.")))],   # the replan only
+        "Radiant lost the fight.": [reply(tool_use("submit_finding", finding("CLAIM-1")))],
+        "Dragon Knight died too often.": [reply(tool_use("submit_finding", dict(finding("CLAIM-2"), verdict="inconclusive")))],
+        "Tusk bought blink late.": [reply(tool_use("submit_finding", finding("CLAIM-3")))],
+        REPORTER_KEY: [reply(tool_use("submit_report", DRAFT))],
+    })
+    result = run_with_checkpoint(second, path)
+
+    assert len([c for c in second.calls if c["key"] == PLANNER_KEY]) == 1     # round 1 was not planned again
+    assert [f.claim for f in result.state.findings] == ["CLAIM-1", "CLAIM-2", "CLAIM-3"]   # nothing counted twice
+    final = load_checkpoint(path)
+    assert final is not None and final.plan is None

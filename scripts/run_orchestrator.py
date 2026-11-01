@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import uuid
+from pathlib import Path
 
 from langfuse import get_client, propagate_attributes
 
@@ -14,18 +15,21 @@ lf = get_client()
 DEFAULT_QUESTION = "What were the key mistakes?"
 
 
-async def main(match_id: int, question: str):
-    run_id = uuid.uuid4().hex[:8]
+async def main(match_id: int, question: str, resume: str | None = None):
+    run_id = resume or uuid.uuid4().hex[:8]
+    checkpoint_path = Path("runs") / run_id / "checkpoint.json"
+    print("run id:", run_id, "(resume with --resume", run_id + ")")
     with lf.start_as_current_observation(as_type="span", name="orchestrator-run",
                                          input={"question": question, "match_id": match_id}) as root:
         with propagate_attributes(trace_name="orchestrator-run",
                                   metadata={"system": "scratch", "match_id": str(match_id), "run_id": run_id}):
             async with McpTools() as tools:
-                result = await run_orchestrator(question, match_id, tools)
+                result = await run_orchestrator(question, match_id, tools, checkpoint_path=checkpoint_path)
             root.update(output={
                 "answer": result.report.answer,
                 "turning_point_s": result.report.turning_point_s,
                 "findings": len(result.report.key_findings),
+                "decisions": result.state.decisions,
                 "dropped": result.state.dropped,
                 "iterations": result.state.iteration+1,
                 "tokens_spent": result.state.tokens_spent,
@@ -38,6 +42,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("match_id", type=int)
     parser.add_argument("--question", default=DEFAULT_QUESTION)
+    parser.add_argument("--resume", help="run id of an earlier run to continue")
     args = parser.parse_args()
-    asyncio.run(main(args.match_id, args.question))
+    asyncio.run(main(args.match_id, args.question, args.resume))
     lf.flush()

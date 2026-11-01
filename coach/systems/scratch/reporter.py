@@ -3,7 +3,7 @@ from pydantic import ValidationError
 
 from coach import llm
 from coach.schemas import ReportDraft, Report
-from coach.systems.scratch.state import RunState
+from coach.systems.scratch.state import RunState, useful_findings
 from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.utils import format_errors
 
@@ -52,7 +52,7 @@ async def write_report(state: RunState, tools: McpTools, llm_call=llm.call) -> R
             continue                                                # bad answer: go to the next attempt
 
         # we only get here when the answer was valid
-        useful = [f for f in state.findings if f.verdict != "inconclusive"]
+        useful = useful_findings(state.findings)
         ranks = {"decisive": 0, "major": 1, "minor": 2}
         key_findings = sorted(useful, key=lambda f: ranks[f.severity])
         return Report(**draft.model_dump(), key_findings=key_findings)

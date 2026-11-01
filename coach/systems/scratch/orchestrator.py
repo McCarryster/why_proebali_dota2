@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from langfuse import get_client
 from dataclasses import dataclass
 
@@ -8,6 +9,7 @@ from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.investigator import InvestigationResult, run_investigator
 from coach.systems.scratch.planner import make_plan
 from coach.systems.scratch.reporter import write_report
+from coach.systems.scratch.checkpoint import Checkpoint, load_checkpoint, save_checkpoint
 from coach.systems.scratch.state import RunState, decide
 
 
@@ -54,17 +56,33 @@ def update_state(state: RunState, plan: Plan, results: dict[str, InvestigationRe
             state.findings.append(result.finding)
 
 
-async def run_orchestrator(question: str, match_id: int, tools: McpTools, llm_call=llm.call) -> RunResult:
-    plan = await make_plan(question, match_id, tools, llm_call=llm_call)
-    state = RunState(question=question, match_id=match_id)
-    while True:
+async def run_orchestrator(question: str, match_id: int, 
+                           tools: McpTools, llm_call=llm.call, checkpoint_path: Path | None = None) -> RunResult:
+
+    def save(plan: Plan | None) -> None:
+        if checkpoint_path:
+            save_checkpoint(checkpoint_path, Checkpoint(state=state, plan=plan))
+
+    checkpoint = load_checkpoint(checkpoint_path) if checkpoint_path else None
+    if checkpoint is not None:
+        plan, state = checkpoint.plan, checkpoint.state
+    else:
+        plan = await make_plan(question, match_id, tools, llm_call=llm_call)
+        state = RunState(question=question, match_id=match_id)
+        save(plan)
+
+    while plan is not None:
         results = await investigate_all(plan, match_id, tools, llm_call=llm_call)
         update_state(state, plan, results)
         decision = decide(state)
+        state.decisions.append(f"{decision.action}: {decision.reason}")
         if decision.action == "finish":
-            break
+            plan = None
+            save(None)
+            break 
         state.iteration += 1
         plan = await make_plan(question, match_id, tools, llm_call=llm_call, avoid=state.hypotheses_tried)
+        save(plan)
 
     report = await write_report(state, tools, llm_call=llm_call)
 
