@@ -3,8 +3,8 @@ import asyncio
 import uuid
 import operator
 from dotenv import load_dotenv
-from typing import Annotated
-
+from typing import Annotated, Any
+from pydantic import ValidationError
 
 from langchain_core.runnables import RunnableConfig
 from langfuse.langchain import CallbackHandler
@@ -12,7 +12,7 @@ from langfuse import get_client, propagate_attributes
 
 from langchain.mcp import MCPAdapter
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 # from langchain.agents import create_agent
 # from langchain.agents.middleware import ToolCallLimitMiddleware
 # from langchain.agents.structured_output import ToolStrategy
@@ -20,6 +20,7 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
 
 from coach.schemas import Finding
+from coach.systems.scratch.utils import format_errors
 
 
 load_dotenv()
@@ -29,8 +30,9 @@ lf = get_client()
 
 
 model_name = "claude-haiku-5-5"
-MAX_TOOL_CALLS = 1
 
+MAX_TOOL_CALLS = 8
+MAX_ATTEMPTS = 2
 
 config = {
     "mcpServers": {
@@ -47,11 +49,17 @@ class submit_finding(Finding): # subclass trick
 class State(MessagesState):
     tokens: Annotated[int, operator.add]
     tool_calls: Annotated[int, operator.add]
+    finding: dict | None
+    attempts: Annotated[int, operator.add]
+
+
+def block_text(r) -> str:
+    return "".join(b["text"] for b in r if b.get("type") == "text")
 
 
 async def main(hypothesis: str, match_id: str):
 
-    async def call_model(state: State):
+    async def call_model(state: State) -> dict[str, Any]:
         text = prompt.messages[0].content.text # type: ignore
         system = SystemMessage(content=text)
         messages = [system] + state["messages"]
@@ -62,12 +70,61 @@ async def main(hypothesis: str, match_id: str):
                 "tokens": usage.get("input_tokens", 0)  + usage.get("output_tokens", 0),
                 "tool_calls": len(tool_calls)}
 
+    async def verify(state: State) -> dict[str, Any]:
+        last = state["messages"][-1]
+        calls = last.tool_calls # type: ignore | list of dicts: {'name','args','id','type'}
+        submit = next(c for c in calls if c["name"] == "submit_finding")
 
-    def route(state: State):
+        # ToolMessage(
+        #     content="text the model will read",   # str
+        #     tool_call_id="toolu_01AEZ9...",       # the "id" of the call you are answering
+        #     status="error",                       # "success" (default) or "error"
+        # )
+
+        problems = []
+        finding = None
+        if len(calls) > 1:
+            problems.append("call submit_finding alone")
+        else:
+            try:
+                finding = Finding.model_validate(submit["args"])
+            except ValidationError as e:
+                problems = [format_errors(e)]
+            else:
+                for ev in finding.evidence:
+                    try:
+                        # payload = ev.model_dump()
+                        # if state["attempts"] == 0 and isinstance(ev.value, (int, float)):
+                            # payload["value"] = ev.value + 1000     # TEMP breakdown
+                        # r = await verif.ainvoke({"match_id": match_id, "evidence": payload})
+                        r = await verif.ainvoke({"match_id": match_id, "evidence": ev.model_dump()})
+                        text = block_text(r)
+                        if not text.startswith("OK"):
+                            problems.append(text) # e.g. "MISMATCH: gold_adv at 1320s is -50352, not -30596 (... 1260s)"
+                    except Exception as e:
+                        problems.append(str(e))
+
+        if problems:
+            msgs = [ToolMessage(content="\n".join(problems), tool_call_id=c["id"], status="error")
+                    for c in calls]
+            return {"attempts": 1, "messages": msgs}
+        
+        assert finding is not None # ...
+        msgs = [ToolMessage(content="accepted", tool_call_id=submit["id"])]
+        return {"finding": finding.model_dump(), "attempts": 1, "messages": msgs}
+
+    def after_verify(state: State) -> str:
+        if state["finding"] is not None:
+            return END
+        if state["attempts"] >= MAX_ATTEMPTS:
+            return END
+        return "model"
+
+    def route(state: State) -> str:
         last = state["messages"][-1]
         names = [call["name"] for call in last.tool_calls] # type: ignore
         if "submit_finding" in names:
-            return END
+            return "verify"
         elif names:
             if state["tool_calls"] > MAX_TOOL_CALLS: # budget spent
                 return END
@@ -95,6 +152,8 @@ async def main(hypothesis: str, match_id: str):
                 tools = await adapter.list_tools()
                 tool_node = ToolNode(tools)
 
+                verif = next((t for t in tools if t.name == "verify_claim"))
+
                 model_with_tools = model.bind_tools(tools + [submit_finding])
                 
                 # agent = create_agent(
@@ -108,8 +167,10 @@ async def main(hypothesis: str, match_id: str):
                 builder = StateGraph(State)
                 builder.add_node("model", call_model)
                 builder.add_node("tools", tool_node)
+                builder.add_node("verify", verify)
                 builder.add_edge(START, "model")
                 builder.add_conditional_edges("model", route)
+                builder.add_conditional_edges("verify", after_verify)
                 builder.add_edge("tools", "model")
                 graph = builder.compile()
 
@@ -119,20 +180,31 @@ async def main(hypothesis: str, match_id: str):
                     "messages": [HumanMessage(content="Begin the investigation.")],
                     "tokens": 0,
                     "tool_calls": 0,
+                    "finding": None,
+                    "attempts": 0,
                 }
                 result = await graph.ainvoke(initial, config=lf_config)
 
                 print(f"tokens = {result["tokens"]} | tool_calls = {result["tool_calls"]}")
                 print(f"length = {len(result["messages"])}")
 
-                last = result["messages"][-1]
-                print(last.tool_calls)
+                # last = result["messages"][-1]
+                # print(last.tool_calls)
 
-                names = [c["name"] for c in last.tool_calls] 
+                # names = [c["name"] for c in last.tool_calls]
 
-                if "submit_finding" in names:
+                # if "submit_finding" in names:
+                #     reason = "submitted"
+                # elif result["tool_calls"] > MAX_TOOL_CALLS:
+                #     reason = "budget"
+                # else:
+                #     reason = "no_tool_call"
+
+                if result["finding"] is not None:
                     reason = "submitted"
-                elif result["tool_calls"] >= MAX_TOOL_CALLS:                     # 
+                elif result["attempts"] >= MAX_ATTEMPTS:
+                    reason = "invalid"
+                elif result["tool_calls"] > MAX_TOOL_CALLS:
                     reason = "budget"
                 else:
                     reason = "no_tool_call"
@@ -142,6 +214,8 @@ async def main(hypothesis: str, match_id: str):
 
                 root.update(output={"reason": reason,
                                     "tokens": result["tokens"],
+                                    "attempts": result["attempts"],
+                                    "finding": result["finding"],
                                     "tool_calls_made": result["tool_calls"],
                                     "messages": len(result["messages"])})
                 print("trace:", lf.get_trace_url())
