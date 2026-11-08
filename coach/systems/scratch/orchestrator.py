@@ -4,9 +4,9 @@ from langfuse import get_client
 from dataclasses import dataclass
 
 from coach import llm
-from coach.schemas import Plan, Hypothesis, Report
+from coach.schemas import Plan, Hypothesis, Report, InvestigationResult
 from coach.systems.scratch.mcp_tools import McpTools
-from coach.systems.scratch.investigator import InvestigationResult, run_investigator
+from coach.systems.scratch.investigator import run_investigator
 from coach.systems.scratch.planner import make_plan
 from coach.systems.scratch.reporter import write_report
 from coach.systems.scratch.checkpoint import Checkpoint, load_checkpoint, save_checkpoint

@@ -4,22 +4,13 @@ The model picks tools (via MCP) until it calls `submit_finding`; every evidence 
 finding is then checked deterministically with `verify_claim`. A wrong finding is sent back to
 the model with the actual values (bounded retries).
 """
-from dataclasses import dataclass
 import asyncio
 from pydantic import ValidationError
 
 from coach import llm
-from coach.schemas import Finding
+from coach.schemas import Finding, InvestigationResult
 from coach.systems.scratch.mcp_tools import McpTools
 from coach.systems.scratch.utils import format_errors
-
-
-@dataclass
-class InvestigationResult:
-    finding: Finding | None
-    tool_calls: int
-    reason: str          # "submitted" | "budget" | "invalid" | "no_tool_call"
-    tokens: int = 0
 
 
 # A LOCAL tool: it is the loop's way out, not something the MCP server offers.

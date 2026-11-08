@@ -1,5 +1,6 @@
 import re
 from typing import Literal
+from dataclasses import dataclass
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -17,9 +18,6 @@ TIMELINE_METRICS = ("gold_adv", "xp_adv")
 Verdict = Literal["supported", "refuted", "inconclusive"]
 
 Severity = Literal["minor", "major", "decisive"]
-
-
-
 
 # Fields that must be absent for each kind of evidence (the required ones are checked below).
 FORBIDDEN_FIELDS = {
@@ -112,6 +110,14 @@ class Finding(BaseModel):
             raise ValueError("claim must be plain text but contains markup such as '</claim>' or '<parameter'. "
                              "Write only the claim sentence here and put the verdict in the separate 'verdict' field")
         return claim
+
+
+@dataclass
+class InvestigationResult:
+    finding: Finding | None
+    tool_calls: int
+    reason: str          # "submitted" | "budget" | "invalid" | "no_tool_call"
+    tokens: int = 0
 
 
 class ReportDraft(BaseModel):

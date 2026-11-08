@@ -1,10 +1,9 @@
-from coach.schemas import Evidence, Finding, Hypothesis, Plan
-from coach.systems.scratch.investigator import InvestigationResult
+from coach.schemas import Evidence, Finding, Hypothesis, Plan, InvestigationResult, Verdict
 from coach.systems.scratch.orchestrator import update_state
 from coach.systems.scratch.state import RunState, decide
 
 
-def finding(verdict="supported"):
+def finding(verdict: Verdict = "supported"):
     return Finding(
         claim="Dragon Knight died 9 times.",
         verdict=verdict,
