@@ -9,7 +9,9 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Send
 from langgraph.graph import StateGraph, START, END
 
+from coach.schemas import Finding
 from coach.systems.langgraph.planner import make_plan
+from coach.systems.scratch.state import RunState, decide
 from coach.systems.langgraph.investigator import run_investigator
 
 
@@ -19,6 +21,10 @@ class MainState(TypedDict):
     plan: dict | None
     tokens: Annotated[int, operator.add]
     results: Annotated[list[dict], operator.add]
+    iteration: int                                  # replace; 0 on the first round
+    decisions: Annotated[list[str], operator.add]   # log, like scratch's state.decisions
+    action: str | None                              # "finish" or "replan", read by the router later
+    hypotheses_tried: Annotated[list[str], operator.add]
 
 
 class InvestigateInput(TypedDict):
@@ -29,9 +35,30 @@ class InvestigateInput(TypedDict):
 GetPrompt = Callable[[str, dict[str, str]], Awaitable[str]]   # (name, args) -> prompt text
 
 
+def to_run_state(state: MainState) -> RunState:
+    return RunState(question=state["question"],
+                    match_id=int(state["match_id"]), # int because scratch version uses int match_id
+                    iteration=state["iteration"],
+                    tokens_spent=state["tokens"],
+                    findings=[Finding.model_validate(r["finding"]) for r in state["results"] if r.get("finding")]
+                    )
+
+def decide_node(state: MainState) -> dict:
+    if state["plan"] is None:
+        raise RuntimeError("decide_node called without a plan")
+    decision = decide(to_run_state(state))
+    tried = [h["statement"] for h in state["plan"]["hypotheses"]]
+    out = {"action": decision.action, "decisions": [f"{decision.action}: {decision.reason}"], "hypotheses_tried": tried}
+    if decision.action == "replan":
+        out["iteration"] = state["iteration"] + 1
+    return out
+
+def after_decide(state: MainState) -> str:
+    if state["action"] == "replan":
+        return "plan"
+    return END
+
 def fan_out(state: MainState) -> list[Send]:
-    # state["plan"] is a dict: its hypotheses are state["plan"]["hypotheses"] (list of dicts)
-    # return Send() per hypothesis
     if state["plan"] is None:
         raise RuntimeError("fan_out called without a plan")
     return [Send("investigate", {"match_id": state["match_id"], "hypothesis": h}) for h in state["plan"]["hypotheses"]]
@@ -58,7 +85,8 @@ def build_main_graph(tools: list[BaseTool], model: ChatAnthropic, get_prompt: Ge
             return {"results": [{"hypothesis_id": h["id"], "status": "error", "error": str(e)}]}
 
     async def plan_node(state: MainState, config: RunnableConfig) -> dict:
-        prompt_text = await get_prompt("planner", {"question": state["question"], "match_id": state["match_id"], "avoid": ""})
+        prompt_text = await get_prompt("planner", {"question": state["question"], "match_id": state["match_id"],
+                                                   "avoid": "\n".join(state["hypotheses_tried"])})
 
         result = await make_plan(match_id=state["match_id"], tools=tools, model=model, 
                                  prompt_text=prompt_text, config=config)
@@ -66,10 +94,14 @@ def build_main_graph(tools: list[BaseTool], model: ChatAnthropic, get_prompt: Ge
         return {"plan": result.plan.model_dump(), "tokens": result.tokens}
 
     builder = StateGraph(MainState)
+    
     builder.add_node("plan", plan_node)
     builder.add_node("investigate", investigate)
+    builder.add_node("decide", decide_node)
+
     builder.add_edge(START, "plan")
     builder.add_conditional_edges("plan", fan_out)
-    builder.add_edge("investigate", END)
+    builder.add_edge("investigate", "decide")
+    builder.add_conditional_edges("decide", after_decide)
 
     return builder.compile()

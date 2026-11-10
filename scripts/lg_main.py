@@ -59,14 +59,24 @@ async def main(question: str, match_id: str):
 
                 try:
                     state = await graph.ainvoke(
-                        {"question": question, "match_id": match_id, "plan": None, "tokens": 0, "results": []},
-                        config={"callbacks": [handler]},
+                        {"question": question, "match_id": match_id, "plan": None, "tokens": 0, 
+                         "results": [], "iteration": 0, "decisions": [], "action": None, "hypotheses_tried": []},
+                        config={"callbacks": [handler], "recursion_limit": 15}, 
                     )
 
-                    print(state["results"], state["plan"], state["tokens"])
+                    # print(state["decisions"], state["action"], state["iteration"], state["tokens"])
+
+                    for r in state["results"]:
+                        finding = r.get("finding")
+                        print(r["hypothesis_id"], r["status"], r.get("reason"),
+                            finding["verdict"] if finding else None, r.get("error"))
+                    print(state["decisions"], state["action"], state["iteration"], state["tokens"])
+
+
 
                     root.update(output={"result": state["results"],
                                         "plan": state["plan"],
+                                        "decisions": state["decisions"],
                                         "tokens": state["tokens"],
                                         })
 
