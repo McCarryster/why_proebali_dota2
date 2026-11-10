@@ -56,7 +56,7 @@ async def main(hypothesis: str, match_id: str):
 
                 result = await run_investigator(
                     match_id=match_id, tools=tools, model=model,
-                    prompt_text=prompt_text, callbacks=[handler],
+                    prompt_text=prompt_text, config={"callbacks": [handler]},
                     max_tool_calls=MAX_TOOL_CALLS, max_attempts=MAX_ATTEMPTS
                 )
 

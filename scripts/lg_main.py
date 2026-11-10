@@ -54,19 +54,28 @@ async def main(question: str, match_id: str):
 
                 handler = CallbackHandler()
 
-                graph = build_main_graph(tools=tools, model=model, get_prompt=get_prompt)
-                state = await graph.ainvoke(
-                    {"question": question, "match_id": match_id, "plan": None, "tokens": 0},
-                    config={"callbacks": [handler]},
-                )
+                graph = build_main_graph(tools=tools, model=model, get_prompt=get_prompt,
+                                         max_tool_calls=8, max_attempts=2)
 
-                print(state["plan"], state["tokens"])
+                try:
+                    state = await graph.ainvoke(
+                        {"question": question, "match_id": match_id, "plan": None, "tokens": 0, "results": []},
+                        config={"callbacks": [handler]},
+                    )
 
-                root.update(output={"plan": state["plan"],
-                                    "tokens": state["tokens"],
-                                    })
+                    print(state["results"], state["plan"], state["tokens"])
+
+                    root.update(output={"result": state["results"],
+                                        "plan": state["plan"],
+                                        "tokens": state["tokens"],
+                                        })
+
+                except Exception as e:
+                    print(repr(e))
+
                 print("trace:", lf.get_trace_url())
                 lf.flush()
+
 
 
 match_id = "9041884546"

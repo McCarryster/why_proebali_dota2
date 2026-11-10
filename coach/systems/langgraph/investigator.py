@@ -113,13 +113,13 @@ async def run_investigator(
     tools: list[BaseTool],          # from adapter.list_tools(), made by the caller
     model: ChatAnthropic,           # made by the caller (testable with a fake)
     prompt_text: str,               # the investigator prompt (already contains the hypothesis and match id)
-    callbacks: list | None = None,  # the Langfuse CallbackHandler, if any
+    config: RunnableConfig | None = None,
     max_tool_calls: int = 8,
     max_attempts: int = 2,
 ) -> InvestigationResult:
 
     graph = build_graph(tools, model, prompt_text, match_id, max_tool_calls, max_attempts)
-    config: RunnableConfig = {"callbacks": callbacks or [], "recursion_limit": 25}
+    run_config: RunnableConfig = {**(config or {}), "recursion_limit": 25}
 
     initial: State = {
         "messages": [HumanMessage(content="Begin the investigation.")],
@@ -128,7 +128,7 @@ async def run_investigator(
         "finding": None,
         "attempts": 0,
     }
-    result = await graph.ainvoke(initial, config=config)
+    result = await graph.ainvoke(initial, config=run_config)
     finding = Finding.model_validate(result["finding"]) if result["finding"] is not None else None
 
     if result["finding"] is not None:
