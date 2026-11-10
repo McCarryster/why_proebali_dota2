@@ -50,6 +50,8 @@ def build_graph(tools: list[BaseTool], model: ChatAnthropic, prompt_text: str, m
     async def call_model(state: State) -> dict[str, Any]:
         messages = [system] + state["messages"]
         reply = await model_with_tools.ainvoke(messages)
+        if reply.response_metadata.get("stop_reason") == "max_tokens":
+            raise RuntimeError("Hit max tokens limit")
         usage = reply.usage_metadata or {}
         tool_calls = [c for c in reply.tool_calls if c["name"] != "submit_finding"]
         return {"messages": [reply], 

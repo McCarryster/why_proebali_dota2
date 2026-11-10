@@ -157,6 +157,12 @@ class Plan(BaseModel):
         return self
 
 
+@dataclass
+class PlanResult:
+    plan: Plan
+    tokens: int = 0
+
+
 if __name__ == "__main__":
     import json
     print(json.dumps(Evidence.model_json_schema(), indent=1))
